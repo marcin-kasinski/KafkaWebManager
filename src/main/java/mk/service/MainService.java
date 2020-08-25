@@ -6,7 +6,13 @@ import mk.dao.TopicPartition;
 import org.apache.kafka.clients.admin.*;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.*;
+import org.apache.kafka.common.acl.*;
+import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.metrics.KafkaMetric;
+import org.apache.kafka.common.resource.PatternType;
+import org.apache.kafka.common.resource.ResourcePattern;
+import org.apache.kafka.common.resource.ResourcePatternFilter;
+import org.apache.kafka.common.resource.ResourceType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -16,6 +22,20 @@ import java.util.concurrent.ExecutionException;
 
 @Service
 public class MainService {
+
+	private static final AclBinding ACL1 = new AclBinding(new ResourcePattern(ResourceType.TOPIC, "mytopic3", PatternType.LITERAL),
+			new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.DESCRIBE, AclPermissionType.ALLOW));
+	private static final AclBinding ACL2 = new AclBinding(new ResourcePattern(ResourceType.TOPIC, "mytopic4", PatternType.LITERAL),
+			new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.DESCRIBE, AclPermissionType.DENY));
+	private static final AclBindingFilter FILTER1 = new AclBindingFilter(new ResourcePatternFilter(ResourceType.ANY, null, PatternType.LITERAL),
+			new AccessControlEntryFilter("User:ANONYMOUS", null, AclOperation.ANY, AclPermissionType.ANY));
+	private static final AclBindingFilter FILTER2 = new AclBindingFilter(new ResourcePatternFilter(ResourceType.ANY, null, PatternType.LITERAL),
+			new AccessControlEntryFilter("User:bob", null, AclOperation.ANY, AclPermissionType.ANY));
+	private static final AclBindingFilter UNKNOWN_FILTER = new AclBindingFilter(
+			new ResourcePatternFilter(ResourceType.UNKNOWN, null, PatternType.LITERAL),
+			new AccessControlEntryFilter("User:bob", null, AclOperation.ANY, AclPermissionType.ANY));
+
+
 
 	AdminClient adminClient;
 
@@ -83,13 +103,77 @@ public class MainService {
 
 	}
 
+	public void listAcls() throws ExecutionException, InterruptedException {
+
+		log.info("listAcls START " );
+		DescribeAclsResult describeAclsResult = adminClient.describeAcls(FILTER1);
+
+		Collection<AclBinding> acls = describeAclsResult.values().get();
+		for (AclBinding acl : acls) {
+
+			log.info("resourceType " +acl.pattern().resourceType());
+			log.info("name " +acl.pattern().name());
+			log.info("patternType " +acl.pattern().patternType());
+			log.info("host " +acl.entry().host());
+			log.info("principal " +acl.entry().principal());
+			log.info("operation " +acl.entry().operation());
+			log.info("permissionType " +acl.entry().permissionType().name());
+			log.info("toString " +acl.toString());
+
+		}
+
+
+
+		}
+
+
+		public void getConfig(ConfigResource.Type type, String name) throws ExecutionException, InterruptedException {
+
+		log.info("getConfig START "+type+ " / "+name);
+
+		//ConfigResource cr = new ConfigResource(ConfigResource.Type.BROKER, "0");
+		ConfigResource cr = new ConfigResource(type, name);
+		DescribeConfigsResult describeConfigsResult = adminClient.describeConfigs(Collections.singleton(cr));
+		Map<ConfigResource, Config> configs = describeConfigsResult.all().get();
+
+		for (Map.Entry<ConfigResource, Config> entry : configs.entrySet()) {
+			//	log.info("Key = " + entry.getKey() + ", Value = " + entry.getValue());
+			//log.info("Key = " + entry.getKey() + ", Value = " + entry.getValue());
+
+			ConfigResource configResource = entry.getKey();
+			Config config = entry.getValue();
+
+			log.info("configResource "+configResource.name());
+
+
+			Collection<ConfigEntry> configEntries =  config.entries();
+
+			for (ConfigEntry configEntry : configEntries) {
+
+				log.info("configEntry "+configEntry.name()+" / "+configEntry.value());
+				log.info(configEntry.toString());
+
+
+			}//			for (ConfigEntry configEntry : configEntries) {
+
+
+
+
+
+		}//for
+
+
+
+
+		}
+
+
 		public List<Broker> listBrokers() throws ExecutionException, InterruptedException {
 
 		log.info("listBrokers START");
 
 		//AdminClient adminClient = connect();
-
-			DescribeClusterResult describeClusterResult = adminClient.describeCluster();
+		DescribeClusterResult describeClusterResult = adminClient.describeCluster();
 		Collection<Node> clusterDetails = describeClusterResult.nodes().get();
 
 		log.info("clusterDetails.size() "+ clusterDetails.size());
@@ -104,8 +188,10 @@ public class MainService {
 			log.info("rack "+node.rack());
 			log.info("port "+node.port());
 
-			brokers.add(new  Broker(node.id(), node.idString(), node.host(), node.rack(), node.port()));
+			getConfig(ConfigResource.Type.BROKER, node.idString());
+			getConfig(ConfigResource.Type.BROKER_LOGGER, node.idString());
 
+			brokers.add(new  Broker(node.id(), node.idString(), node.host(), node.rack(), node.port()));
 
 		}
 
@@ -263,7 +349,9 @@ public class MainService {
 				Topic topic = new Topic(topicDescription.name(), topicPartitions);
 
 
- 		topics.add(topic);
+			getConfig(ConfigResource.Type.TOPIC, topicDescription.name());
+
+			topics.add(topic);
 		}//for
 
 /*

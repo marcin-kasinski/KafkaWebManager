@@ -82,6 +82,17 @@ public class MicroserviceController {
 		//return topics;
 	}
 
+	@RequestMapping("/listacls")
+	// @ResponseBody
+	public void listAcls() throws ExecutionException, InterruptedException {
+
+		//	List<Topic> topics = mainService.listConsumers();
+		mainService.listAcls();
+
+		//return topics;
+	}
+
+
 	@RequestMapping("/describetopic")
 	// @ResponseBody
 	public Topic describetopic(@RequestParam(value = "topicname") String topicname)  {
